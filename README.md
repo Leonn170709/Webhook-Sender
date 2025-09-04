@@ -7,3 +7,5 @@
 - Option of the amount of messages
 - Custom Delay
 - Linux and Windows support
+  
+>Use it on Linux, since it has more features that I couldn’t port to Windows. If you don’t have Linux, you can run it in WSL or inside a VM.
