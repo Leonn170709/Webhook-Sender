@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Webhook Sender Web 🚀</title>
+<script>
+let running = false;
+
+function startSending() {
+    const webhooks = document.getElementById("webhooks").value.split("\n").filter(x => x.trim() !== "");
+    const message = document.getElementById("message").value;
+    const count = document.getElementById("count").value;
+    const delay = parseFloat(document.querySelector('input[name="delay"]:checked').value);
+
+    fetch("/start", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({webhooks, message, count, delay})
+    }).then(res => res.json()).then(data => {
+        running = true;
+        updateStatus();
+    });
+}
+
+function stopSending() {
+    fetch("/stop", {method: "POST"}).then(res => res.json()).then(data => {
+        running = false;
+    });
+}
+
+function updateStatus() {
+    fetch("/status").then(res => res.json()).then(data => {
+        document.getElementById("sent").innerText = data.sent;
+        document.getElementById("failed").innerText = data.failed;
+        document.getElementById("last_error").innerText = data.last_error;
+
+        if (data.running) {
+            setTimeout(updateStatus, 500);
+        }
+    });
+}
+</script>
+</head>
+<body style="font-family:sans-serif;padding:20px;">
+<h1>Webhook Sender Web 🚀</h1>
+
+<label>Webhooks (one per line):</label><br>
+<textarea id="webhooks" rows="6" cols="60"></textarea><br><br>
+
+<label>Message:</label><br>
+<input type="text" id="message" size="60"><br><br>
+
+<label>Amount (0 = infinite):</label><br>
+<input type="number" id="count" value="0"><br><br>
+
+<label>Delay:</label><br>
+<input type="radio" name="delay" value="0.4" checked> 0.4s (best for Discord)<br>
+<input type="radio" name="delay" value="1.0"> 1s<br>
+<input type="radio" name="delay" value="2.0"> 2s<br><br>
+
+<button onclick="startSending()">Start</button>
+<button onclick="stopSending()">Stop</button>
+
+<h2>Status</h2>
+<p>Sent: <span id="sent">0</span></p>
+<p>Failed: <span id="failed">0</span></p>
+<p>Last Error: <span id="last_error">None</span></p>
+
+</body>
+</html>
