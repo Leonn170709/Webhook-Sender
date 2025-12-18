@@ -8,7 +8,7 @@
 - Custom Delay
 - Linux and Windows support
   
->Use it on Linux, since it has more features that I couldn’t port to Windows. If you don’t have Linux, you can run it in WSL or inside a VM.
+>Use it on Linux, since it has more features that I couldn’t port to Windows and never tested on Windows. If you don’t have Linux, you can run it in WSL or inside a VM.
 ## Running the Python Program
 > [!NOTE]
 > It is highly recommended to use a virtual environment:
