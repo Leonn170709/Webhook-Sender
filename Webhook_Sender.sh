@@ -51,9 +51,14 @@ fi
 
 # ================= MESSAGE =================
 read -p "Message: " message
+if [[ -z "$message" ]]; then
+    echo -e "${RED}Error: Message cannot be empty.${RESET}"
+    exit 1
+fi
 
 # ================= COUNT ===================
 read -p "How many times to send? (0 = infinite): " count
+[[ ! "$count" =~ ^[0-9]+$ ]] && count=1
 [[ "$count" == "0" ]] && infinite=true
 
 # ================= DELAY ===================
@@ -81,19 +86,27 @@ sleep 1
 while true; do
     ((sent++))
     had_error=false
-    last_error="None"
+
+    # Create temporary file for parallel result tracking
+    tmp_res=$(mktemp)
 
     for wh in "${webhooks[@]}"; do
-        # Capture HTTP code + curl errors
-        curl_output=$(curl -sS -o /dev/null -w "%{http_code}" \
-            -X POST -H "Content-Type: application/json" \
-            -d "{\"content\": \"$message\"}" "$wh" 2>&1)
+        (
+            # Capture HTTP code
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X POST -H "Content-Type: application/json" \
+                -d "{\"content\": \"$message\"}" "$wh")
+            echo "$code" >> "$tmp_res"
+        ) &
+    done
+    wait # Wait for all parallel sends for this batch
 
-        http_code="${curl_output: -3}"
+        # Process results
+    while read -r http_code; do
+        [[ -z "$http_code" ]] && continue
 
         case "$http_code" in
-            200|204)
-                ;;
+            200|201|204) ;;
             429)
                 last_error="429 Rate Limited"
                 had_error=true
@@ -110,9 +123,10 @@ while true; do
                 ((failed++))
                 ;;
         esac
-    done
+    done < "$tmp_res"
+    rm -f "$tmp_res"
 
-    clear
+    printf "\033[H\033[J" # Faster clear
     echo -e "${CYAN}--------------------------------------------------${RESET}"
     echo -e " Message: ${YELLOW}\"$message\"${RESET}"
     if $infinite; then

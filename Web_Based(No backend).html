@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webhook Sender</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* holy ai slop */
+  body {
+    height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: rgba(255,255,255,0.8);
+    background: #0d0d0f;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 55% 55% at 0% 20%, rgba(99,74,210,0.13) 0%, transparent 70%),
+      radial-gradient(ellipse 45% 45% at 100% 85%, rgba(30,180,120,0.09) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    position: relative;
+    z-index: 1;
+    border-right: 1px solid rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.02);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 20px;
+    gap: 16px;
+    overflow-y: auto;
+  }
+
+  h1 {
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    flex-shrink: 0;
+  }
+
+  label {
+    display: block;
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 6px;
+  }
+
+  .tag-area {
+    min-height: 56px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: flex-start;
+    cursor: text;
+    transition: border-color 0.15s;
+  }
+  .tag-area:focus-within { border-color: rgba(99,74,210,0.5); }
+  .tag-area input {
+    background: transparent; border: none; outline: none;
+    color: rgba(255,255,255,0.75); font-size: 13px;
+    flex: 1; min-width: 100px; padding: 2px 4px;
+  }
+  .tag-area input::placeholder { color: rgba(255,255,255,0.18); }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(99,74,210,0.2);
+    border: 1px solid rgba(99,74,210,0.35);
+    border-radius: 5px;
+    padding: 2px 6px 2px 8px;
+    font-size: 11px; color: rgba(180,165,255,0.85);
+    max-width: 190px;
+  }
+  .tag span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag button {
+    background: none; border: none; cursor: pointer;
+    color: rgba(180,165,255,0.35); font-size: 14px; line-height: 1;
+    padding: 0; display: flex; align-items: center;
+  }
+  .tag button:hover { color: rgba(255,80,80,0.7); }
+
+  textarea, input[type=number] {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    color: rgba(255,255,255,0.8);
+    font-size: 13px; font-family: inherit;
+    padding: 8px 10px; outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea { resize: vertical; }
+  textarea:focus, input[type=number]:focus { border-color: rgba(99,74,210,0.5); }
+  textarea::placeholder { color: rgba(255,255,255,0.18); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  #urlCount { font-size: 10px; color: rgba(255,255,255,0.18); margin-top: 4px; }
+
+  .spacer { flex: 1; }
+
+  button.start {
+    width: 100%; padding: 9px;
+    font-size: 13px; font-weight: 500;
+    background: rgba(255,255,255,0.88);
+    color: #0d0d0f; border: none; border-radius: 8px;
+    cursor: pointer; transition: background 0.15s, transform 0.1s;
+  }
+  button.start:hover:not(:disabled) { background: #fff; }
+  button.start:active:not(:disabled) { transform: scale(0.98); }
+  button.start:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+  button.stop, button.clear {
+    flex: 1; padding: 8px;
+    font-size: 13px;
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.35);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  button.stop:hover:not(:disabled), button.clear:hover {
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7);
+  }
+  button.stop:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Main panel ── */
+  .main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 28px;
+    gap: 16px;
+    overflow: hidden;
+  }
+
+  .main-top {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  /* stat pills in top bar */
+  .pill {
+    display: flex; align-items: baseline; gap: 5px;
+  }
+  .pill .val {
+    font-size: 20px; font-weight: 500;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .pill .lbl { font-size: 10px; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  #statStatus {
+    margin-left: auto;
+    font-size: 11px;
+    color: rgba(255,255,255,0.25);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  .stats-top { display: none; }
+  .stats-top.visible { display: flex; align-items: center; gap: 20px; }
+
+  /* message box — fixed height, not full screen */
+  .msg-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .msg-wrap label { margin-bottom: 8px; }
+  .msg-wrap textarea {
+    flex: 1;
+    min-height: 0;
+    max-height: 320px;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 14px 16px;
+    border-radius: 10px;
+  }
+  .hint {
+    margin-top: 6px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.15);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* log panel */
+  .log-wrap {
+    flex: 1;
+    min-height: 0;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 10px 12px;
+    overflow-y: auto;
+    display: none;
+  }
+  .log-wrap.visible { display: block; }
+  .log-wrap::-webkit-scrollbar { width: 3px; }
+  .log-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+  .log-line {
+    display: flex; gap: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .log-line:last-child { border-bottom: none; }
+  .ok  { color: rgba(30,180,120,0.8); }
+  .err { color: rgba(255,80,80,0.75); }
+  .ts  { color: rgba(255,255,255,0.18); }
+  .lm  { color: rgba(255,255,255,0.4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <h1>Webhook Sender</h1>
+
+  <div>
+    <label>URLs</label>
+    <div class="tag-area" id="tagArea" onclick="document.getElementById('urlInput').focus()">
+      <input id="urlInput" type="text" placeholder="Paste URL, press Enter…"
+             onkeydown="handleKey(event)" onpaste="handlePaste(event)">
+    </div>
+    <p id="urlCount">0 webhooks</p>
+  </div>
+
+  <div>
+    <label>Message</label>
+    <textarea id="message" rows="5" placeholder="Your message…"></textarea>
+    <p class="hint" style="margin-top:5px">→ {"content": "…"}</p>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Repeats <span style="opacity:.4">0=∞</span></label>
+      <input type="number" id="count" value="1" min="0">
+    </div>
+    <div>
+      <label>Delay (s)</label>
+      <input type="number" id="delay" value="0.4" step="0.1" min="0">
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div>
+    <button class="start" id="startBtn" onclick="startSending()">Start</button>
+    <div class="btn-row">
+      <button class="stop" id="stopBtn" onclick="stopSending()" disabled>Stop</button>
+      <button class="clear" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+</aside>
+
+<main class="main">
+  <!-- stats shown after first run -->
+  <div class="stats-top" id="statsTop">
+    <div class="pill">
+      <span class="val" id="statSent" style="color:rgba(30,180,120,0.9)">0</span>
+      <span class="lbl">sent</span>
+    </div>
+    <div class="pill">
+      <span class="val" id="statFailed" style="color:rgba(255,80,80,0.8)">0</span>
+      <span class="lbl">failed</span>
+    </div>
+    <span id="statStatus">—</span>
+  </div>
+
+  <!-- request log fills remaining space -->
+  <div class="log-wrap" id="logBox"></div>
+
+  <!-- placeholder when idle -->
+  <div id="placeholder" style="flex:1;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.08);font-size:13px;letter-spacing:0.04em;">
+    No requests yet
+  </div>
+</main>
+
+<script>
+  let running = false;
+  let sent = 0, failed = 0;
+  const urls = [];
+
+  function renderTags() {
+    document.querySelectorAll('.wh-tag').forEach(t => t.remove());
+    const area = document.getElementById('tagArea');
+    const inp = document.getElementById('urlInput');
+    urls.forEach((url, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'tag wh-tag';
+      const s = document.createElement('span');
+      s.textContent = url.replace(/^https?:\/\//, '').slice(0, 26) + (url.length > 33 ? '…' : '');
+      s.title = url;
+      const b = document.createElement('button');
+      b.textContent = '×';
+      b.onclick = e => { e.stopPropagation(); urls.splice(i, 1); renderTags(); };
+      tag.appendChild(s); tag.appendChild(b);
+      area.insertBefore(tag, inp);
+    });
+    document.getElementById('urlCount').textContent = `${urls.length} webhook${urls.length !== 1 ? 's' : ''}`;
+  }
+
+  function addUrls(raw) {
+    raw.split(/[\n\r\t,]+/).map(u => u.trim()).filter(u => u.startsWith('http'))
+       .forEach(u => { if (!urls.includes(u)) urls.push(u); });
+    renderTags();
+  }
+
+  function handleKey(e) {
+    const v = e.target.value.trim();
+    if ((e.key === 'Enter' || e.key === 'Tab') && v) { e.preventDefault(); addUrls(v); e.target.value = ''; }
+    if (e.key === 'Backspace' && !v && urls.length) { urls.pop(); renderTags(); }
+  }
+
+  function handlePaste(e) {
+    e.preventDefault();
+    addUrls(e.clipboardData.getData('text'));
+    e.target.value = '';
+  }
+
+  function addLog(msg, type) {
+    const box = document.getElementById('logBox');
+    const el = document.createElement('div');
+    el.className = 'log-line';
+    const t = new Date().toLocaleTimeString('en', { hour12: false });
+    el.innerHTML = `<span class="${type}">${type === 'ok' ? '✓' : '✗'}</span><span class="ts">${t}</span><span class="lm">${msg}</span>`;
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setUI(active) {
+    running = active;
+    document.getElementById('startBtn').disabled = active;
+    document.getElementById('stopBtn').disabled = !active;
+    document.getElementById('statStatus').textContent = active ? 'running' : 'done';
+    document.getElementById('statStatus').style.color = active ? 'rgba(240,190,60,0.75)' : 'rgba(255,255,255,0.2)';
+  }
+
+  async function startSending() {
+    if (!urls.length) return alert('Add at least one URL.');
+    const msg = document.getElementById('message').value.trim();
+    if (!msg) return alert('Enter a message.');
+    const count = parseInt(document.getElementById('count').value);
+    const delay = parseFloat(document.getElementById('delay').value) * 1000;
+    const body = JSON.stringify({ content: msg });
+
+    sent = 0; failed = 0;
+    document.getElementById('statSent').textContent = '0';
+    document.getElementById('statFailed').textContent = '0';
+    document.getElementById('logBox').innerHTML = '';
+    document.getElementById('statsTop').classList.add('visible');
+    document.getElementById('logBox').classList.add('visible');
+    document.getElementById('placeholder').style.display = 'none';
+    setUI(true);
+
+    let round = 0;
+    while (running) {
+      for (const url of urls) {
+        if (!running) break;
+        try {
+          const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          sent++;
+          document.getElementById('statSent').textContent = sent;
+          try { addLog(new URL(url).hostname, 'ok'); } catch { addLog(url, 'ok'); }
+        } catch (e) {
+          failed++;
+          document.getElementById('statFailed').textContent = failed;
+          addLog(e.message, 'err');
+        }
+      }
+      round++;
+      if (count !== 0 && round >= count) break;
+      await new Promise(r => setTimeout(r, delay));
+    }
+    setUI(false);
+  }
+
+  function stopSending() { running = false; }
+
+  function clearAll() {
+    if (running) return;
+    urls.length = 0; renderTags();
+    document.getElementById('message').value = '';
+    document.getElementById('statsTop').classList.remove('visible');
+    document.getElementById('logBox').classList.remove('visible');
+    document.getElementById('logBox').innerHTML = '';
+    document.getElementById('placeholder').style.display = 'flex';
+  }
+</script>
+</body>
+</html>
